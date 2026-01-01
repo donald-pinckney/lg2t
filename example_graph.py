@@ -1,5 +1,9 @@
+import json
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
+
+from graph import Graph
+from compiler import migrate_using_claude
 
 class State(TypedDict):
     messages: List[str]
@@ -13,24 +17,31 @@ def farewell(state: State):
     state["messages"].append("Goodbye!")
     return state
 
-workflow = StateGraph(State)
 
-workflow.add_node("greet", greet)
-workflow.add_node("farewell", farewell)
-workflow.set_entry_point("greet")
+g = StateGraph(State)
+
+g.add_node("greet", greet)
+g.add_node("farewell", farewell)
+g.set_entry_point("greet")
 
 # When greet finishes, go to farewell
-workflow.add_edge("greet", "farewell")
+g.add_edge("greet", "farewell")
 
 # When farewell finishes, end the graph
-workflow.add_edge("farewell", END)
+g.add_edge("farewell", END)
 
-print(workflow)
+print(g)
 
-app = workflow.compile()
+graph = Graph.from_langgraph(g)
+migrate_using_claude(graph)
 
-print(app)
+app = g.compile()
+
+# print(app)
 
 
-result = app.invoke({"messages": []})
-print(result)
+# result = app.invoke({"messages": []})
+# print(result)
+
+
+print(farewell.__qualname__)
