@@ -14,7 +14,7 @@ from lg2t.graph import (
     START,
     END,
 )
-from lg2t.migrator import migrate_using_claude
+from lg2t.migrator import migrate_to_temporal
 
 __version__ = "0.1.0"
 
@@ -30,7 +30,7 @@ __all__ = [
     "START",
     "END",
     # Main function
-    "migrate_using_claude",
+    "migrate_to_temporal",
     # Version
     "__version__",
 ]
