@@ -1,9 +1,5 @@
 # lg2t
 
-[![PyPI version](https://badge.fury.io/py/lg2t.svg)](https://badge.fury.io/py/lg2t)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 Automatically migrate your [LangGraph](https://github.com/langchain-ai/langgraph) graphs to [Temporal](https://temporal.io/) workflows using Claude.
 
 ## Why Migrate?
@@ -42,6 +38,7 @@ from langgraph.graph import StateGraph, END
 from lg2t import migrate_to_temporal
 
 # Your existing LangGraph definition
+
 class State(TypedDict):
     messages: list[str]
 
@@ -53,7 +50,7 @@ def finalize(state: State) -> State:
     state["messages"].append("Done!")
     return state
 
-# Build the graph
+# Typical LangGraph wiring
 graph = StateGraph(State)
 graph.add_node("process", process)
 graph.add_node("finalize", finalize)
@@ -61,8 +58,7 @@ graph.set_entry_point("process")
 graph.add_edge("process", "finalize")
 graph.add_edge("finalize", END)
 
-# Migrate to Temporal
-migrate_to_temporal(graph)
+migrate_to_temporal(graph) # <- Just add this line, and run!
 ```
 
 This will:
