@@ -58,7 +58,8 @@ async def migrate_using_claude_async(graph: Graph, migration_dir: str):
         output_format={
             "type": "json_schema",
             "schema": MigrationOutput.model_json_schema(),
-        }
+        },
+        allowed_tools=["WebSearch"],
     )
 
     spinner_task = "Analyzing graph"
@@ -102,12 +103,16 @@ import node_foo from ... appropriate module ...
 
 @workflow.defn
 def node_foo_activity(input: FooInput) -> FooOutput:
+    # NOTE: You MUST call the existing node_foo function here!
     new_state_map = node_foo({{ ... assemble dictionary of state that node_foo expects from the input ... }})
     return FooOutput(... assemble typed output of the outputs node_foo needs to make to the workflow state ...)
 ```
     
     5b. When calling the activity function within the workflow code, you will need to pass appropriate inputs from workflow state to the activity function,
     and take outputs from the activity function and update workflow state accordingly.
+
+    5c. CRUCIALLY, your node activity functions MUST call the existing node function! This is because we are aiming to do a step-by-step migration, and this makes it easier to verify correctness.
+    Do NOT, under any circumstances, re-do or duplicate the logic of the existing node function!
 
 You will write the code for two separate Python files: one for the workflow code and one for all the activities' code. 
 You will do so by returning a structured output with the fields: "workflow_file" and "activities_file", each of which is a string containing the code for the respective file.
@@ -149,7 +154,7 @@ Please perform your analysis and create the workflow and activity code. Addition
     return session_id
 
 def apply_migration(migration: MigrationOutput, migration_dir: str):
-    spinner = Spinner("applying migration")
+    spinner = Spinner("Applying migration")
     spinner.start()
     with open(os.path.join(migration_dir, "workflow.py"), "w") as f:
         f.write(migration.workflow_file)
@@ -177,15 +182,19 @@ def migrate_using_claude(graph: Graph):
         already_exists = True
     
     if already_exists:
-        response = input(f"Workflow and activities files already exist in {migration_dir}. Continue (will overwrite)? (y/N)")
+        response = input(f"workflow.py or activities.py already exist in {migration_dir}. Continue (will overwrite)? (y/N) ")
         if response != "y":
             print("Aborting migration.")
             return
+        
+        # Remove the files
+        os.remove(workflow_file)
+        os.remove(activities_file)
     
     session_id = asyncio.run(migrate_using_claude_async(graph, migration_dir))
 
     print(f"Migration completed! Files saved to {migration_dir}/workflow.py and {migration_dir}/activities.py.")
-    print(f"Would you like to continue the conversion with Claude? (Y/n)")
+    print(f"Would you like to continue the conversion with Claude? (Y/n) ")
     response = input()
     if response == "n":
         return
