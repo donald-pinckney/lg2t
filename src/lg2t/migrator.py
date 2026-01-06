@@ -24,7 +24,7 @@ from lg2t.graph import Graph
 
 class _Spinner:
     """A simple terminal spinner for visual feedback."""
-    
+
     def __init__(self, text: str = "working...", delay: float = 0.1) -> None:
         self.text = text
         self.delay = delay
@@ -33,6 +33,7 @@ class _Spinner:
 
     def start(self) -> None:
         """Start the spinner animation."""
+
         def run() -> None:
             spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
             i = 0
@@ -55,22 +56,23 @@ class _Spinner:
 
 class MigrationOutput(BaseModel):
     """The output from the Claude migration process.
-    
+
     Attributes:
         workflow_file: The generated Temporal workflow Python code.
         activities_file: The generated Temporal activities Python code.
     """
+
     workflow_file: str
     activities_file: str
 
 
 async def _migrate_using_claude_async(graph: Graph, migration_dir: str) -> Optional[str]:
     """Async implementation of the migration process.
-    
+
     Args:
         graph: The Graph representation to migrate.
         migration_dir: Directory where generated files will be saved.
-        
+
     Returns:
         The session ID for continuing the conversation, or None.
     """
@@ -90,7 +92,7 @@ async def _migrate_using_claude_async(graph: Graph, migration_dir: str) -> Optio
     spinner_task = "Analyzing graph"
     spinner = _Spinner(spinner_task)
     spinner.start()
-    
+
     session_id: Optional[str] = None
 
     async for message in query(
@@ -152,9 +154,9 @@ Please perform your analysis and create the workflow and activity code. Addition
 """,
         options=options,
     ):
-        if hasattr(message, 'subtype') and message.subtype == 'init':
-            session_id = message.data.get('session_id')
-    
+        if hasattr(message, "subtype") and message.subtype == "init":
+            session_id = message.data.get("session_id")
+
         if isinstance(message, AssistantMessage):
             for block in message.content:
                 if isinstance(block, TextBlock):
@@ -171,18 +173,18 @@ Please perform your analysis and create the workflow and activity code. Addition
         ):
             pass
 
-        if hasattr(message, 'structured_output'):
+        if hasattr(message, "structured_output"):
             output = MigrationOutput.model_validate(message.structured_output)
             spinner.stop()
             _apply_migration(output, migration_dir)
-    
+
     print()
     return session_id
 
 
 def _apply_migration(migration: MigrationOutput, migration_dir: str) -> None:
     """Write the generated migration files to disk.
-    
+
     Args:
         migration: The migration output containing file contents.
         migration_dir: Directory where files will be saved.
@@ -199,9 +201,9 @@ def _apply_migration(migration: MigrationOutput, migration_dir: str) -> None:
 def _migrate_using_claude(graph: Graph, migration_dir: str) -> None:
     workflow_file = os.path.join(migration_dir, "workflow.py")
     activities_file = os.path.join(migration_dir, "activities.py")
-    
+
     already_exists = os.path.exists(workflow_file) or os.path.exists(activities_file)
-    
+
     if already_exists:
         response = input(
             f"workflow.py or activities.py already exist in {migration_dir}. "
@@ -210,15 +212,17 @@ def _migrate_using_claude(graph: Graph, migration_dir: str) -> None:
         if response.lower() != "y":
             print("Aborting migration.")
             return
-        
+
         if os.path.exists(workflow_file):
             os.remove(workflow_file)
         if os.path.exists(activities_file):
             os.remove(activities_file)
-    
+
     session_id = asyncio.run(_migrate_using_claude_async(graph, migration_dir))
 
-    print(f"Migration completed! Files saved to {migration_dir}/workflow.py and {migration_dir}/activities.py.")
+    print(
+        f"Migration completed! Files saved to {migration_dir}/workflow.py and {migration_dir}/activities.py."
+    )
     print("Would you like to continue the conversion with Claude? (Y/n) ")
     response = input()
     if response.lower() == "n":
@@ -227,26 +231,27 @@ def _migrate_using_claude(graph: Graph, migration_dir: str) -> None:
         if session_id:
             os.execvp("claude", ["claude", "--resume", session_id])
 
+
 def migrate_to_temporal(g: StateGraph, output_dir: Optional[str] = None):
     """Migrate a LangGraph graph to Temporal using Claude.
-    
+
     This function takes a LangGraph StateGraph and uses Claude to generate equivalent Temporal workflow
     and activity code.
-    
+
     Args:
         graph: The Graph to migrate.
         output_dir: Optional directory for output files. If not specified,
             uses the directory of the calling script.
-    
+
     Example:
         >>> from langgraph.graph import StateGraph
         >>> from lg2t import migrate
-        >>> 
+        >>>
         >>> # Create your LangGraph
         >>> graph = StateGraph(MyState)
         >>> graph.add_node("process", process_fn)
         >>> # ... add more nodes and edges ...
-        >>> 
+        >>>
         >>> # Migrate the graph to Temporal
         >>> migrate(graph)
     """
@@ -263,4 +268,3 @@ def migrate_to_temporal(g: StateGraph, output_dir: Optional[str] = None):
 
     graph = Graph.from_langgraph(g)
     _migrate_using_claude(graph, migration_dir)
-
