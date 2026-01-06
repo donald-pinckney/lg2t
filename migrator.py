@@ -151,11 +151,10 @@ Please perform your analysis and create the workflow and activity code. Addition
 def apply_migration(migration: MigrationOutput, migration_dir: str):
     spinner = Spinner("applying migration")
     spinner.start()
-    # print(migration)
-    # with open(os.path.join(migration_dir, "workflow.py"), "w") as f:
-    #     f.write(migration.workflow_file)
-    # with open(os.path.join(migration_dir, "activities.py"), "w") as f:
-    #     f.write(migration.activities_file)
+    with open(os.path.join(migration_dir, "workflow.py"), "w") as f:
+        f.write(migration.workflow_file)
+    with open(os.path.join(migration_dir, "activities.py"), "w") as f:
+        f.write(migration.activities_file)
     spinner.stop()
 
 def migrate_using_claude(graph: Graph):

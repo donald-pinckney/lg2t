@@ -3,7 +3,7 @@ from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 
 from graph import Graph
-from compiler import migrate_using_claude
+from migrator import migrate_using_claude
 
 class State(TypedDict):
     messages: List[str]
@@ -30,14 +30,8 @@ g.add_edge("greet", "farewell")
 # When farewell finishes, end the graph
 g.add_edge("farewell", END)
 
+app = g.compile()
 graph = Graph.from_langgraph(g)
 migrate_using_claude(graph)
 
-app = g.compile()
-
-# print(app)
-
-
-# result = app.invoke({"messages": []})
-# print(result)
 
