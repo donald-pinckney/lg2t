@@ -1,20 +1,33 @@
+"""Graph representation for LangGraph to Temporal migration."""
+
 from collections import defaultdict
 from dataclasses import dataclass, field
-import json
-from typing import Any, Dict, Optional, Self
-
-from langgraph.graph import StateGraph
-from langgraph.constants import START as LG_START, END as LG_END
-import sys
 import inspect
+import json
+from typing import Any, Callable, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from langgraph.graph import StateGraph
+
+from langgraph.constants import START as LG_START, END as LG_END
 
 
 START = "__special_start_node__"
+"""Special identifier for the start node in the graph."""
+
 END = "__special_end_node__"
+"""Special identifier for the end node in the graph."""
 
 
 def _map_node_name(name: str) -> str:
-    """Map langgraph node names to our internal names."""
+    """Map langgraph node names to our internal names.
+    
+    Args:
+        name: The LangGraph node name.
+        
+    Returns:
+        The mapped internal node name.
+    """
     if name == LG_START:
         return START
     elif name == LG_END:
@@ -24,48 +37,102 @@ def _map_node_name(name: str) -> str:
 
 @dataclass
 class Edge:
+    """Base class for graph edges."""
     pass
+
 
 @dataclass
 class StaticEdge(Edge):
+    """A static edge that always transitions to the same target node.
+    
+    Attributes:
+        target: The name of the target node.
+    """
     target: str
+
 
 @dataclass
 class RoutingEdge(Edge):
+    """A conditional edge that uses a routing function to determine the target.
+    
+    Attributes:
+        routing_fn: The name of the routing function.
+        possible_targets: Optional list of possible target nodes.
+    """
     routing_fn: str
     possible_targets: Optional[list[str]]
 
+
 @dataclass
 class CommandEdge(Edge):
+    """An edge triggered by a Command object returned from a node.
+    
+    Attributes:
+        possible_targets: Optional list of possible target nodes.
+    """
     possible_targets: Optional[list[str]]
+
 
 @dataclass
 class Node:
-    """A basic block: a straight-line sequence of instructions."""
+    """A node in the graph representing a computation step.
+    
+    Attributes:
+        name: The node's identifier.
+        defined_at: Optional source location where the node function is defined.
+        definition: Optional full definition of the node function.
+    """
     name: str
     defined_at: Optional[str] = None
     definition: Optional[str] = None
 
+
 @dataclass
 class Graph:
-    """A control flow graph."""
+    """A control flow graph representation.
+    
+    This class represents a LangGraph as a directed graph that can be
+    serialized to a format suitable for AI-assisted migration to Temporal.
+    
+    Attributes:
+        state_schema_description: Description of the state schema.
+        input_schema_description: Description of the input schema.
+        output_schema_description: Description of the output schema.
+        nodes: Dictionary mapping node names to Node objects.
+        edges: Dictionary mapping source node names to lists of Edge objects.
+    """
     state_schema_description: Optional[str] = None
     input_schema_description: Optional[str] = None
     output_schema_description: Optional[str] = None
 
-    nodes: dict[str, Node] = field(default_factory=lambda: dict())
+    nodes: dict[str, Node] = field(default_factory=dict)
     edges: defaultdict[str, list[Edge]] = field(default_factory=lambda: defaultdict(list))
 
-    
     def add_node(self, node: Node) -> None:
+        """Add a node to the graph.
+        
+        Args:
+            node: The node to add.
+        """
         self.nodes[node.name] = node
 
     def add_edge(self, from_node: str, edge: Edge) -> None:
+        """Add an edge from a node.
+        
+        Args:
+            from_node: The source node name.
+            edge: The edge to add.
+        """
         self.edges[from_node].append(edge)
 
     def to_prompt(self) -> str:
-        """Serialize the graph to JSON."""
-        def edge_to_dict(edge: Edge) -> dict:
+        """Serialize the graph to a format suitable for AI prompts.
+        
+        Returns:
+            A string representation of the graph with JSON structure
+            and source code definitions.
+        """
+        def edge_to_dict(edge: Edge) -> dict[str, Any]:
             if isinstance(edge, StaticEdge):
                 return {"type": "static", "target": edge.target}
             elif isinstance(edge, RoutingEdge):
@@ -79,7 +146,6 @@ class Graph:
             else:
                 raise ValueError(f"Unknown edge type: {type(edge)}")
 
-
         graph_json = json.dumps({
             "nodes": [{
                 "name": node.name,
@@ -91,7 +157,10 @@ class Graph:
             },
         }, indent=2)
 
-        node_definitions = "\n\n".join([f"Function for node \"{node.name}\" {node.definition}" for node in self.nodes.values() if node.definition])
+        node_definitions = "\n\n".join([
+            f"Function for node \"{node.name}\" {node.definition}" 
+            for node in self.nodes.values() if node.definition
+        ])
 
         return f"""<graph_json>
 {graph_json}
@@ -113,31 +182,56 @@ class Graph:
 {node_definitions}
 </node_definitions>"""
 
-
     @staticmethod
-    def get_type_definition_description(t) -> str:
+    def get_type_definition_description(t: type) -> str:
+        """Get a description of a type definition including source code.
+        
+        Args:
+            t: The type to describe.
+            
+        Returns:
+            A string with file location and source code.
+        """
         def_code = inspect.getsource(t)
         file = inspect.getsourcefile(t)
         lines = inspect.getsourcelines(t)
         return f"Defined at {file}:{lines[1]}:\n```python\n{def_code}```"
 
     @staticmethod
-    def get_function_definition_description(f) -> str:
+    def get_function_definition_description(f: Callable[..., Any]) -> str:
+        """Get a description of a function definition including source code.
+        
+        Args:
+            f: The function to describe.
+            
+        Returns:
+            A string with file location and source code.
+        """
         def_code = inspect.getsource(f)
         file = inspect.getsourcefile(f)
         lines = inspect.getsourcelines(f)
         return f"defined at {file}:{lines[1]}:\n```python\n{def_code}```"
 
-
     @staticmethod
-    def from_langgraph(lg: StateGraph) -> "Graph":
+    def from_langgraph(lg: "StateGraph") -> "Graph":
         """Convert a LangGraph StateGraph to our Graph representation.
         
         Args:
-            lg: A langgraph StateGraph instance (not compiled)
+            lg: A langgraph StateGraph instance (not compiled).
             
         Returns:
-            A Graph instance representing the same control flow
+            A Graph instance representing the same control flow.
+            
+        Example:
+            >>> from langgraph.graph import StateGraph
+            >>> from lg2t import Graph
+            >>> 
+            >>> # Create your LangGraph
+            >>> builder = StateGraph(MyState)
+            >>> # ... add nodes and edges ...
+            >>> 
+            >>> # Convert to our Graph format
+            >>> graph = Graph.from_langgraph(builder)
         """
         graph = Graph()
 
@@ -199,3 +293,4 @@ class Graph:
                     graph.add_edge(node_name, CommandEdge(possible_targets=targets))
         
         return graph
+
