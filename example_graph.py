@@ -30,8 +30,6 @@ g.add_edge("greet", "farewell")
 # When farewell finishes, end the graph
 g.add_edge("farewell", END)
 
-print(g)
-
 graph = Graph.from_langgraph(g)
 migrate_using_claude(graph)
 
@@ -43,5 +41,3 @@ app = g.compile()
 # result = app.invoke({"messages": []})
 # print(result)
 
-
-print(farewell.__qualname__)

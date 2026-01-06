@@ -1,10 +1,12 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
 import json
-from typing import Optional, Self
+from typing import Any, Dict, Optional, Self
 
 from langgraph.graph import StateGraph
 from langgraph.constants import START as LG_START, END as LG_END
+import sys
+import inspect
 
 
 START = "__special_start_node__"
@@ -42,10 +44,15 @@ class Node:
     """A basic block: a straight-line sequence of instructions."""
     name: str
     defined_at: Optional[str] = None
+    definition: Optional[str] = None
 
 @dataclass
 class Graph:
     """A control flow graph."""
+    state_schema_description: Optional[str] = None
+    input_schema_description: Optional[str] = None
+    output_schema_description: Optional[str] = None
+
     nodes: dict[str, Node] = field(default_factory=lambda: dict())
     edges: defaultdict[str, list[Edge]] = field(default_factory=lambda: defaultdict(list))
 
@@ -56,7 +63,7 @@ class Graph:
     def add_edge(self, from_node: str, edge: Edge) -> None:
         self.edges[from_node].append(edge)
 
-    def to_json(self) -> str:
+    def to_prompt(self) -> str:
         """Serialize the graph to JSON."""
         def edge_to_dict(edge: Edge) -> dict:
             if isinstance(edge, StaticEdge):
@@ -72,16 +79,55 @@ class Graph:
             else:
                 raise ValueError(f"Unknown edge type: {type(edge)}")
 
-        return json.dumps({
+
+        graph_json = json.dumps({
             "nodes": [{
                 "name": node.name,
-                "defined_at": node.defined_at,
+                **({"defined_at": node.defined_at} if node.defined_at is not None else {})
             } for node in self.nodes.values()],
             "edges": {
                 source: [edge_to_dict(e) for e in edges]
                 for source, edges in self.edges.items()
             },
         }, indent=2)
+
+        node_definitions = "\n\n".join([f"Function for node \"{node.name}\" {node.definition}" for node in self.nodes.values() if node.definition])
+
+        return f"""<graph_json>
+{graph_json}
+</graph_json>
+
+<state_schema_description>
+{self.state_schema_description}
+</state_schema_description>
+
+<input_schema_description>
+{self.input_schema_description}
+</input_schema_description>
+
+<output_schema_description>
+{self.output_schema_description}
+</output_schema_description>
+
+<node_definitions>
+{node_definitions}
+</node_definitions>"""
+
+
+    @staticmethod
+    def get_type_definition_description(t) -> str:
+        def_code = inspect.getsource(t)
+        file = inspect.getsourcefile(t)
+        lines = inspect.getsourcelines(t)
+        return f"Defined at {file}:{lines[1]}:\n```python\n{def_code}```"
+
+    @staticmethod
+    def get_function_definition_description(f) -> str:
+        def_code = inspect.getsource(f)
+        file = inspect.getsourcefile(f)
+        lines = inspect.getsourcelines(f)
+        return f"defined at {file}:{lines[1]}:\n```python\n{def_code}```"
+
 
     @staticmethod
     def from_langgraph(lg: StateGraph) -> "Graph":
@@ -94,6 +140,10 @@ class Graph:
             A Graph instance representing the same control flow
         """
         graph = Graph()
+
+        graph.state_schema_description = Graph.get_type_definition_description(lg.state_schema)
+        graph.input_schema_description = Graph.get_type_definition_description(lg.input_schema)
+        graph.output_schema_description = Graph.get_type_definition_description(lg.output_schema)
         
         # Add START and END pseudo-nodes
         graph.add_node(Node(name=START, defined_at=None))
@@ -102,10 +152,10 @@ class Graph:
         # Add all nodes from the langgraph
         for node_name in lg.nodes:
             spec = lg.nodes[node_name]
-            # spec.runnable.
             node_code = spec.runnable.func.__code__
             def_place = f"{node_code.co_filename}:{node_code.co_firstlineno}"
-            graph.add_node(Node(name=node_name, defined_at=def_place))
+            definition = Graph.get_function_definition_description(spec.runnable.func)
+            graph.add_node(Node(name=node_name, defined_at=def_place, definition=definition))
         
         # Add static edges from lg.edges (set of (start, end) tuples)
         for start, end in lg.edges:
