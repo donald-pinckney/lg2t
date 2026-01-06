@@ -102,39 +102,6 @@ migrate_to_temporal(graph, output_dir="/path/to/output")
 - `graph`: A `Graph` instance from `Graph.from_langgraph()`
 - `output_dir`: Optional output directory (defaults to the calling script's directory)
 
-## Example
-
-See the [`examples/`](./examples/) directory for a complete working example.
-
-```python
-# examples/example_graph.py
-from typing import TypedDict, List
-from langgraph.graph import StateGraph, END
-from lg2t import migrate_to_temporal
-
-# Your existing LangGraph code...
-class State(TypedDict):
-    messages: List[str]
-
-def greet(state: State):
-    state["messages"].append("Hello!")
-    return state
-
-def farewell(state: State):
-    state["messages"].append("Goodbye!")
-    return state
-
-g = StateGraph(State)
-g.add_node("greet", greet)
-g.add_node("farewell", farewell)
-g.set_entry_point("greet")
-g.add_edge("greet", "farewell")
-g.add_edge("farewell", END)
-
-# Just add this line in, and run!
-migrate_to_temporal(graph)
-```
-
 ## Development
 
 ### Setup
