@@ -161,7 +161,7 @@ def migrate_using_claude(graph: Graph):
     frame = inspect.currentframe()
     try:
         caller_frame = frame.f_back
-        migration_dir = os.path.abspath(caller_frame.f_code.co_filename)
+        migration_dir = os.path.dirname(os.path.abspath(caller_frame.f_code.co_filename))
     finally:
         # Avoid reference cycles
         del frame
